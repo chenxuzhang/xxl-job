@@ -27,7 +27,7 @@ public class XxlJobScheduler  {
         // admin trigger pool start
         JobTriggerPoolHelper.toStart();
 
-        // admin registry monitor run
+        // admin registry monitor run。调度中心 针对 执行器 注册的信息维护(接收执行器的注册和注销、维护执行器心跳(重复注册操作)、执行器服务心跳检测、定时将可用的执行器地址归档(归到XxlJobGroup表))
         JobRegistryHelper.getInstance().start();
 
         // admin fail-monitor run

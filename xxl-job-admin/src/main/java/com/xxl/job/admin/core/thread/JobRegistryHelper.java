@@ -58,19 +58,19 @@ public class JobRegistryHelper {
 			public void run() {
 				while (!toStop) {
 					try {
-						// auto registry group
+						// auto registry group 自动注册的分组
 						List<XxlJobGroup> groupList = XxlJobAdminConfig.getAdminConfig().getXxlJobGroupDao().findByAddressType(0);
 						if (groupList!=null && !groupList.isEmpty()) {
 
-							// remove dead address (admin/executor)
+							// remove dead address (admin/executor) 心跳检测,超过3个心跳时间未进行维护上报,就认为 执行器服务 挂了,需要定时清除
 							List<Integer> ids = XxlJobAdminConfig.getAdminConfig().getXxlJobRegistryDao().findDead(RegistryConfig.DEAD_TIMEOUT, new Date());
 							if (ids!=null && ids.size()>0) {
-								XxlJobAdminConfig.getAdminConfig().getXxlJobRegistryDao().removeDead(ids);
+								XxlJobAdminConfig.getAdminConfig().getXxlJobRegistryDao().removeDead(ids); // 移除异常的 注册信息
 							}
 
 							// fresh online address (admin/executor)
 							HashMap<String, List<String>> appAddressMap = new HashMap<String, List<String>>();
-							List<XxlJobRegistry> list = XxlJobAdminConfig.getAdminConfig().getXxlJobRegistryDao().findAll(RegistryConfig.DEAD_TIMEOUT, new Date());
+							List<XxlJobRegistry> list = XxlJobAdminConfig.getAdminConfig().getXxlJobRegistryDao().findAll(RegistryConfig.DEAD_TIMEOUT, new Date()); // 查询出最近3个心跳时间注册或维护心跳的 执行器服务。前面是查询超过3个心跳时间未维护心跳的 执行器服务
 							if (list != null) {
 								for (XxlJobRegistry item: list) {
 									if (RegistryConfig.RegistType.EXECUTOR.name().equals(item.getRegistryGroup())) {
@@ -79,7 +79,7 @@ public class JobRegistryHelper {
 										if (registryList == null) {
 											registryList = new ArrayList<String>();
 										}
-
+										// key:执行器配置的 xxl.job.executor.appname 值,value:执行器服务的 ip:端口
 										if (!registryList.contains(item.getRegistryValue())) {
 											registryList.add(item.getRegistryValue());
 										}
@@ -88,7 +88,7 @@ public class JobRegistryHelper {
 								}
 							}
 
-							// fresh group address
+							// fresh group address 由于是主动定时拉取数据校验,就会存在时间空挡。执行器服务 在线程休眠期间挂掉了
 							for (XxlJobGroup group: groupList) {
 								List<String> registryList = appAddressMap.get(group.getAppname());
 								String addressListStr = null;
