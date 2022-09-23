@@ -64,7 +64,7 @@ public class JobThread extends Thread{
 			logger.info(">>>>>>>>>>> repeate trigger job, logId:{}", triggerParam.getLogId());
 			return new ReturnT<String>(ReturnT.FAIL_CODE, "repeate trigger job, logId:" + triggerParam.getLogId());
 		}
-
+		// logId 是每次任务调度的log记录表主键ID,为了防止一个任务在当前执行器重复执行
 		triggerLogIdSet.add(triggerParam.getLogId());
 		triggerQueue.add(triggerParam);
         return ReturnT.SUCCESS;
@@ -96,7 +96,7 @@ public class JobThread extends Thread{
     @Override
 	public void run() {
 
-    	// init
+    	// init  @XxlJob 注解 init() 配置的方法,此处调用执行
     	try {
 			handler.init();
 		} catch (Throwable e) {
@@ -106,12 +106,12 @@ public class JobThread extends Thread{
 		// execute
 		while(!toStop){
 			running = false;
-			idleTimes++;
+			idleTimes++; // 空闲空转次数累加,当有一次任务执行,将会被置为0
 
             TriggerParam triggerParam = null;
             try {
 				// to check toStop signal, we need cycle, so wo cannot use queue.take(), instand of poll(timeout)
-				triggerParam = triggerQueue.poll(3L, TimeUnit.SECONDS);
+				triggerParam = triggerQueue.poll(3L, TimeUnit.SECONDS); // 需要检查 toStop 状态,所以此处不能无限期阻塞等待
 				if (triggerParam!=null) {
 					running = true;
 					idleTimes = 0;
@@ -126,44 +126,44 @@ public class JobThread extends Thread{
 							triggerParam.getBroadcastIndex(),
 							triggerParam.getBroadcastTotal());
 
-					// init job context
+					// init job context 暂存至 ThreadLocal 结构中,被 @XxlJob 标注的方法,执行的时候可通过 XxlJobContext.getXxlJobContext(); 获取暂存的内容
 					XxlJobContext.setXxlJobContext(xxlJobContext);
 
 					// execute
 					XxlJobHelper.log("<br>----------- xxl-job job execute start -----------<br>----------- Param:" + xxlJobContext.getJobParam());
-
+					// 任务执行超时时间,单位秒。 调度中心后台配置任务的时候可配置
 					if (triggerParam.getExecutorTimeout() > 0) {
 						// limit timeout
 						Thread futureThread = null;
-						try {
+						try { // 基于 FutureTask + 开新线程 实现 ？？？FutureTask可并行执行任务,同步阻塞获取执行结果
 							FutureTask<Boolean> futureTask = new FutureTask<Boolean>(new Callable<Boolean>() {
 								@Override
 								public Boolean call() throws Exception {
 
-									// init job context
+									// init job context // ThreadLocal 是和线程绑定的,此处开启了新线程,需要重新绑定
 									XxlJobContext.setXxlJobContext(xxlJobContext);
-
+									// 执行 @XxlJob 标注的方法
 									handler.execute();
 									return true;
 								}
-							});
+							}); // futureTask 交给新线程去执行,调用 futureTask.get(...) 之前,还可以继续处理其他业务,但是此处交给新线程执行后,就立刻调用 .get(...) 阻塞等待了??
 							futureThread = new Thread(futureTask);
 							futureThread.start();
-
+							// 当前线程同步等待 handler.execute(); 执行结果
 							Boolean tempResult = futureTask.get(triggerParam.getExecutorTimeout(), TimeUnit.SECONDS);
 						} catch (TimeoutException e) {
 
 							XxlJobHelper.log("<br>----------- xxl-job job execute timeout");
 							XxlJobHelper.log(e);
 
-							// handle result
+							// handle result 响应超时code码及描述
 							XxlJobHelper.handleTimeout("job execute timeout ");
 						} finally {
 							futureThread.interrupt();
 						}
 					} else {
 						// just execute
-						handler.execute();
+						handler.execute(); // 调用被 @XxlJob 标注的方法
 					}
 
 					// valid execute handle data
@@ -183,7 +183,7 @@ public class JobThread extends Thread{
 					);
 
 				} else {
-					if (idleTimes > 30) {
+					if (idleTimes > 30) { // 空转次数超过30次 且 队列为空,也就是 90秒(3 * 30),将 jobThread 移除
 						if(triggerQueue.size() == 0) {	// avoid concurrent trigger causes jobId-lost
 							XxlJobExecutor.removeJobThread(jobId, "excutor idel times over limit.");
 						}
@@ -206,14 +206,14 @@ public class JobThread extends Thread{
                 if(triggerParam != null) {
                     // callback handler info
                     if (!toStop) {
-                        // commonm
+                        // commonm 当前任务处理完毕 且 当前 JobThread 未被干掉(toStop=true), 异步告知 调度中心 执行器服务的执行结果
                         TriggerCallbackThread.pushCallBack(new HandleCallbackParam(
                         		triggerParam.getLogId(),
 								triggerParam.getLogDateTime(),
 								XxlJobContext.getXxlJobContext().getHandleCode(),
 								XxlJobContext.getXxlJobContext().getHandleMsg() )
 						);
-                    } else {
+                    } else { // 当前任务执行过程中,当前 JobThread 被干掉(toStop=true), 异步告知 调度中心
                         // is killed
                         TriggerCallbackThread.pushCallBack(new HandleCallbackParam(
                         		triggerParam.getLogId(),
@@ -225,12 +225,12 @@ public class JobThread extends Thread{
                 }
             }
         }
-
+		// 当 toStop 为 true 的时候,也就是当前 JobThread 被干掉(toStop=true).干掉的原因:TODO 1. 2. 3.
 		// callback trigger request in queue
 		while(triggerQueue !=null && triggerQueue.size()>0){
-			TriggerParam triggerParam = triggerQueue.poll();
+			TriggerParam triggerParam = triggerQueue.poll(); // poll() 方法不会造成当前线程被阻塞(队列数据为空的时候)
 			if (triggerParam!=null) {
-				// is killed
+				// is killed 任务未执行,需要告知 调度中心,此处也是异步方式处理 队列 + 线程
 				TriggerCallbackThread.pushCallBack(new HandleCallbackParam(
 						triggerParam.getLogId(),
 						triggerParam.getLogDateTime(),
@@ -240,7 +240,7 @@ public class JobThread extends Thread{
 			}
 		}
 
-		// destroy
+		// destroy  @XxlJob 注解 destroy() 配置的方法,此处调用执行
 		try {
 			handler.destroy();
 		} catch (Throwable e) {
