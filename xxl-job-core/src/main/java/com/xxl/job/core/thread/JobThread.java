@@ -72,7 +72,7 @@ public class JobThread extends Thread{
 
     /**
      * kill job thread
-     *
+     * 干掉的原因:1.执行器服务正常关闭 2.idleTimes空转次数超过阀值,节约资源吧 3.任务调度被终止(执行器服务netty调用kill 或者 任务调度中心调用logKill接口) 4.任务调度中心修改了调度配置 或 阻塞处理策略(覆盖之前调度 且 之前调度JobThread队列有待执行任务)
      * @param stopReason
      */
 	public void toStop(String stopReason) {
@@ -225,7 +225,7 @@ public class JobThread extends Thread{
                 }
             }
         }
-		// 当 toStop 为 true 的时候,也就是当前 JobThread 被干掉(toStop=true).干掉的原因:TODO 1. 2. 3.
+		// 当 toStop 为 true 的时候,也就是当前 JobThread 被干掉(toStop=true).
 		// callback trigger request in queue
 		while(triggerQueue !=null && triggerQueue.size()>0){
 			TriggerParam triggerParam = triggerQueue.poll(); // poll() 方法不会造成当前线程被阻塞(队列数据为空的时候)

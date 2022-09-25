@@ -94,8 +94,8 @@ public class XxlJobExecutor  {
                 JobThread oldJobThread = removeJobThread(item.getKey(), "web container destroy and kill the job.");
                 // wait for job thread push result to callback queue
                 if (oldJobThread != null) {
-                    try {
-                        oldJobThread.join();
+                    try { // 等待oldJobThread线程执行完毕,为了防止和TriggerCallbackThread发生并发问题(TriggerCallbackThread线程结束了,oldJobThread通过TriggerCallbackThread.pushCallBack(...)追加了callback操作)
+                        oldJobThread.join(); // 执行器优雅停机优化,修复任务线程中断未join导致回调丢失的问题；
                     } catch (InterruptedException e) {
                         logger.error(">>>>>>>>>>> xxl-job, JobThread destroy(join) error, jobId:{}", item.getKey(), e);
                     }

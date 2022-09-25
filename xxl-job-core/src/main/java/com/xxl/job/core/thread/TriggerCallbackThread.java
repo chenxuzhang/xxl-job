@@ -36,7 +36,7 @@ public class TriggerCallbackThread {
      */
     private LinkedBlockingQueue<HandleCallbackParam> callBackQueue = new LinkedBlockingQueue<HandleCallbackParam>();
     public static void pushCallBack(HandleCallbackParam callback){
-        getInstance().callBackQueue.add(callback);
+        getInstance().callBackQueue.add(callback); // Callback 操作的异步化
         logger.debug(">>>>>>>>>>> xxl-job, push callback request, logId:{}", callback.getLogId());
     }
 
@@ -48,7 +48,7 @@ public class TriggerCallbackThread {
     private volatile boolean toStop = false;
     public void start() {
 
-        // valid
+        // valid 校验任务调度中心地址, Callback 为了与任务调度中心交互
         if (XxlJobExecutor.getAdminBizList() == null) {
             logger.warn(">>>>>>>>>>> xxl-job, executor callback config fail, adminAddresses is null.");
             return;
@@ -62,10 +62,10 @@ public class TriggerCallbackThread {
 
                 // normal callback
                 while(!toStop){
-                    try {
+                    try { // take() 操作会阻塞等待,等待 pushCallBack(...) 被调用
                         HandleCallbackParam callback = getInstance().callBackQueue.take();
                         if (callback != null) {
-
+                            // drainTo 将队列中的元素放入 drainTo 方法实参中(批量处理,lock的)
                             // callback list param
                             List<HandleCallbackParam> callbackParamList = new ArrayList<HandleCallbackParam>();
                             int drainToNum = getInstance().callBackQueue.drainTo(callbackParamList);
@@ -73,7 +73,7 @@ public class TriggerCallbackThread {
 
                             // callback, will retry if error
                             if (callbackParamList!=null && callbackParamList.size()>0) {
-                                doCallback(callbackParamList);
+                                doCallback(callbackParamList); // Callback 是一个批量操作接口
                             }
                         }
                     } catch (Exception e) {
@@ -82,13 +82,13 @@ public class TriggerCallbackThread {
                         }
                     }
                 }
-
+                // JobThread 线程通过 TriggerCallbackThread.pushCallBack(...)  传递callback参数, 因为 JobThread 和当前线程异步执行,所以toStop(...)时,JobThread必须执行完毕才能停止当前线程,具体逻辑在 XxlJobExecutor.destroy()
                 // last callback
-                try {
+                try { // 执行器服务优雅停机后callBackQueue队列还有数据的后续处理
                     List<HandleCallbackParam> callbackParamList = new ArrayList<HandleCallbackParam>();
                     int drainToNum = getInstance().callBackQueue.drainTo(callbackParamList);
                     if (callbackParamList!=null && callbackParamList.size()>0) {
-                        doCallback(callbackParamList);
+                        doCallback(callbackParamList); // 回调失败后,将回调参数保存进日志中,为了triggerRetryCallbackThread重试
                     }
                 } catch (Exception e) {
                     if (!toStop) {
