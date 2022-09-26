@@ -23,8 +23,8 @@ public class XxlJobScheduler  {
     public void init() throws Exception {
         // init i18n
         initI18n();
-
-        // admin trigger pool start
+        // ①、②、③(执行器服务的执行逻辑)、④ 为任务调度执行的步骤 ①、②、④ 为任务调度中心执行的步骤
+        // ② admin trigger pool start
         JobTriggerPoolHelper.toStart();
         // 任务调度中心 针对 执行器服务 注册的信息维护(接收执行器的注册和注销、维护执行器心跳(重复注册操作)、执行器服务心跳检测、定时将可用的执行器地址归档(归到XxlJobGroup表))
         // admin registry monitor run。
@@ -33,13 +33,13 @@ public class XxlJobScheduler  {
         // admin fail-monitor run
         JobFailMonitorHelper.getInstance().start();
         // 任务调度中心 接收并处理 执行器服务 上报的任务处理结果(包括 "执行器服务断线数据补偿"和"子任务"的处理)
-        // admin lose-monitor run ( depend on JobTriggerPoolHelper )
+        // ④ admin lose-monitor run ( depend on JobTriggerPoolHelper )
         JobCompleteHelper.getInstance().start();
 
         // admin log report start
         JobLogReportHelper.getInstance().start();
 
-        // start-schedule  ( depend on JobTriggerPoolHelper )
+        // ① start-schedule  ( depend on JobTriggerPoolHelper )
         JobScheduleHelper.getInstance().start();
 
         logger.info(">>>>>>>>> init xxl-job admin success.");
