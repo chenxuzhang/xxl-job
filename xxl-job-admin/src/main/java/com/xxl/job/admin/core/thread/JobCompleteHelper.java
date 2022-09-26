@@ -34,7 +34,7 @@ public class JobCompleteHelper {
 	private volatile boolean toStop = false;
 	public void start(){
 
-		// for callback
+		// for callback 异步处理 callback 请求
 		callbackThreadPool = new ThreadPoolExecutor(
 				2,
 				20,
@@ -56,7 +56,7 @@ public class JobCompleteHelper {
 				});
 
 
-		// for monitor
+		// for monitor 执行器断线,调度中心 对运行中的log日志进行数据补偿(失败)
 		monitorThread = new Thread(new Runnable() {
 
 			@Override
@@ -134,12 +134,12 @@ public class JobCompleteHelper {
 
 
 	// ---------------------- helper ----------------------
-
+	// 异步处理 执行器服务 执行结果回调参数。更新 XxlJobLog 表状态值,调度中心发起 调度的时候,会向 XxlJobLog 表写入数据
 	public ReturnT<String> callback(List<HandleCallbackParam> callbackParamList) {
 
 		callbackThreadPool.execute(new Runnable() {
 			@Override
-			public void run() {
+			public void run() { // 回调后,还有子任务的执行逻辑
 				for (HandleCallbackParam handleCallbackParam: callbackParamList) {
 					ReturnT<String> callbackResult = callback(handleCallbackParam);
 					logger.debug(">>>>>>>>> JobApiController.callback {}, handleCallbackParam={}, callbackResult={}",
@@ -174,7 +174,7 @@ public class JobCompleteHelper {
 		log.setHandleTime(new Date());
 		log.setHandleCode(handleCallbackParam.getHandleCode());
 		log.setHandleMsg(handleMsg.toString());
-		XxlJobCompleter.updateHandleInfoAndFinish(log);
+		XxlJobCompleter.updateHandleInfoAndFinish(log); // 更新 XxlJobLog 同时,触发子任务的调度(但是前提是当前任务执行成功,才会调度子任务)
 
 		return ReturnT.SUCCESS;
 	}

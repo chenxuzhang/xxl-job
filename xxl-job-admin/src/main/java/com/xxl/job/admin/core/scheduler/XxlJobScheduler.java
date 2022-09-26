@@ -26,13 +26,13 @@ public class XxlJobScheduler  {
 
         // admin trigger pool start
         JobTriggerPoolHelper.toStart();
-
-        // admin registry monitor run。调度中心 针对 执行器 注册的信息维护(接收执行器的注册和注销、维护执行器心跳(重复注册操作)、执行器服务心跳检测、定时将可用的执行器地址归档(归到XxlJobGroup表))
+        // 任务调度中心 针对 执行器服务 注册的信息维护(接收执行器的注册和注销、维护执行器心跳(重复注册操作)、执行器服务心跳检测、定时将可用的执行器地址归档(归到XxlJobGroup表))
+        // admin registry monitor run。
         JobRegistryHelper.getInstance().start();
-
+        // TODO 任务失败重试(重试1次？？？)告警
         // admin fail-monitor run
         JobFailMonitorHelper.getInstance().start();
-
+        // 任务调度中心 接收并处理 执行器服务 上报的任务处理结果(包括 "执行器服务断线数据补偿"和"子任务"的处理)
         // admin lose-monitor run ( depend on JobTriggerPoolHelper )
         JobCompleteHelper.getInstance().start();
 

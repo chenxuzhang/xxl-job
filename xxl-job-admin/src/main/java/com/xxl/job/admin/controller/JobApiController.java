@@ -54,7 +54,7 @@ public class JobApiController {
         }
 
         // services mapping
-        if ("callback".equals(uri)) {
+        if ("callback".equals(uri)) { // 执行器服务,执行完任务,会通过此接口向 任务调度中心 上报执行情况
             List<HandleCallbackParam> callbackParamList = GsonTool.fromJson(data, List.class, HandleCallbackParam.class);
             return adminBiz.callback(callbackParamList);
         } else if ("registry".equals(uri)) {

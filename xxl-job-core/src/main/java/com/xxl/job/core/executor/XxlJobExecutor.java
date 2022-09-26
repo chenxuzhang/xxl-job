@@ -259,7 +259,7 @@ public class XxlJobExecutor  {
         if (oldJobThread != null) {
             oldJobThread.toStop(removeOldReason);
             oldJobThread.interrupt();
-
+            // 移除任务工作线程的时候,先设置共享变量值(用于触发结束线程死循环逻辑)再中断线程(结束线程的阻塞状态)
             return oldJobThread;
         }
         return null;

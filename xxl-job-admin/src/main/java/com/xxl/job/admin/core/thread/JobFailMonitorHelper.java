@@ -37,12 +37,12 @@ public class JobFailMonitorHelper {
 				// monitor
 				while (!toStop) {
 					try {
-
+						// 没有执行成功 且 未报警
 						List<Long> failLogIds = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().findFailJobLogIds(1000);
 						if (failLogIds!=null && !failLogIds.isEmpty()) {
 							for (long failLogId: failLogIds) {
-
-								// lock log
+								// TODO xxl_job_log 一条记录,只有一次机会执行以下逻辑。 alarmStatus状态变更 0->-1(锁定状态), -1->1/2/3(告警最终状态) ？？？？
+								// lock log 分布式锁
 								int lockRet = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().updateAlarmStatus(failLogId, 0, -1);
 								if (lockRet < 1) {
 									continue;
@@ -50,7 +50,7 @@ public class JobFailMonitorHelper {
 								XxlJobLog log = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().load(failLogId);
 								XxlJobInfo info = XxlJobAdminConfig.getAdminConfig().getXxlJobInfoDao().loadById(log.getJobId());
 
-								// 1、fail retry monitor
+								// 1、fail retry monitor 还有重试次数,重新发起调用,任务调度中心在 xxl_job_info表 配置了可重试次数
 								if (log.getExecutorFailRetryCount() > 0) {
 									JobTriggerPoolHelper.trigger(log.getJobId(), TriggerTypeEnum.RETRY, (log.getExecutorFailRetryCount()-1), log.getExecutorShardingParam(), log.getExecutorParam(), null);
 									String retryMsg = "<br><br><span style=\"color:#F39C12;\" > >>>>>>>>>>>"+ I18nUtil.getString("jobconf_trigger_type_retry") +"<<<<<<<<<<< </span><br>";
@@ -66,7 +66,7 @@ public class JobFailMonitorHelper {
 								} else {
 									newAlarmStatus = 1;
 								}
-
+								// 释放锁,同时更新告警状态. alarmStatus状态变更 -1->1/2/3(告警最终状态)
 								XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().updateAlarmStatus(failLogId, -1, newAlarmStatus);
 							}
 						}
