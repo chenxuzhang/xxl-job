@@ -76,10 +76,10 @@ public class JobTriggerPoolHelper {
                            final String executorParam,
                            final String addressList) {
 
-        // choose thread pool
+        // choose thread pool. 快慢线程池 切换, 当jobId对应 jobTimeoutCountMap集合value 超过10次,切换为慢线程池(jobTimeoutCount 每隔500毫秒 +1)
         ThreadPoolExecutor triggerPool_ = fastTriggerPool;
         AtomicInteger jobTimeoutCount = jobTimeoutCountMap.get(jobId);
-        if (jobTimeoutCount!=null && jobTimeoutCount.get() > 10) {      // job-timeout 10 times in 1 min
+        if (jobTimeoutCount!=null && jobTimeoutCount.get() > 10) { // job-timeout 10 times in 1 min  一个jobId任务,1分钟10次超时(超过500毫秒),什么业务的任务能做到？？？
             triggerPool_ = slowTriggerPool;
         }
 
@@ -89,9 +89,9 @@ public class JobTriggerPoolHelper {
             public void run() {
 
                 long start = System.currentTimeMillis();
-
-                try {
-                    // do trigger
+                // 慢线程池是为了防止快线程池的线程数量被耗尽,所以调用频次1分钟内很高才会出现这种情况。但是可能还会出现快线程池被耗尽的情况(大批量每分钟执行的任务+每分钟调用频率不超过10次)
+                try { // 只能相对来说减少快线程池线程数量被耗尽的场景出现。
+                    // 同步调用链耗时场景.1:任务调度中心(验证表中数据、路由策略的处理、log日志的处理、发送http请求) 2:执行器服务(netty接收到任务后,将任务丢到线程池处理就响应了数据)
                     XxlJobTrigger.trigger(jobId, triggerType, failRetryCount, executorShardingParam, executorParam, addressList);
                 } catch (Exception e) {
                     logger.error(e.getMessage(), e);
@@ -99,9 +99,9 @@ public class JobTriggerPoolHelper {
 
                     // check timeout-count-map
                     long minTim_now = System.currentTimeMillis()/60000;
-                    if (minTim != minTim_now) {
+                    if (minTim != minTim_now) { // minTim 一分钟变量值切换一次,同时将 jobTimeoutCountMap 清空
                         minTim = minTim_now;
-                        jobTimeoutCountMap.clear();
+                        jobTimeoutCountMap.clear(); // 1分钟,500毫秒的
                     }
 
                     // incr timeout-count-map
