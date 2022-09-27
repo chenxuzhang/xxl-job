@@ -30,18 +30,18 @@ public class JobFailMonitorHelper {
 	private volatile boolean toStop = false;
 	public void start(){
 		monitorThread = new Thread(new Runnable() {
-
+			// 任务调度中心由当前监控线程对log进行补充处理,执行器服务由triggerRetryCallbackThread线程对执行结果上报进行补充处理
 			@Override
 			public void run() {
-
+				// 每条 xxl_job_log 记录对应一个任务的执行,即便是任务执行重试也会新增一条记录.每个 xxl_job_log.alarm_status 状态变更都是单方向的
 				// monitor
-				while (!toStop) {
-					try {
-						// 没有执行成功 且 未报警
+				while (!toStop) { // handle_code!=200 执行器服务执行异常,trigger_code != 0 或 200 调度失败(无可用的执行器地址或http错误)
+					try { // findFailJobLogIds 方法查询条件 !((trigger_code in (0, 200) and handle_code = 0) OR (handle_code = 200)) AND `alarm_status` = 0
+						// trigger_code:调度结果(由任务调度中心发起http后,响应结果确定的), handle_code:执行结果(由执行器服务执行完毕后,上报结果到任务调度中心后更新的) 针对调度成功且执行器服务未上报执行结果且宕机了则由JobCompleteHelper.monitorThread 进行数据补偿
 						List<Long> failLogIds = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().findFailJobLogIds(1000);
 						if (failLogIds!=null && !failLogIds.isEmpty()) {
 							for (long failLogId: failLogIds) {
-								// TODO xxl_job_log 一条记录,只有一次机会执行以下逻辑。 alarmStatus状态变更 0->-1(锁定状态), -1->1/2/3(告警最终状态) ？？？？
+								// 每条记录都有一次。 alarmStatus状态变更 0->-1(锁定状态), -1->1/2/3(告警最终状态)
 								// lock log 分布式锁
 								int lockRet = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().updateAlarmStatus(failLogId, 0, -1);
 								if (lockRet < 1) {

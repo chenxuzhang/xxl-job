@@ -50,7 +50,7 @@ public class JobScheduleHelper {
                     }
                 }
                 logger.info(">>>>>>>>> init xxl-job admin scheduler success.");
-
+                // 根据 快慢线程池线程数量 计算出当前节点可进行调度处理的任务数量,预估50毫秒一个任务
                 // pre-read count: treadpool-size * trigger-qps (each trigger cost 50ms, qps = 1000/50 = 20)
                 int preReadCount = (XxlJobAdminConfig.getAdminConfig().getTriggerPoolFastMax() + XxlJobAdminConfig.getAdminConfig().getTriggerPoolSlowMax()) * 20;
 
@@ -69,36 +69,36 @@ public class JobScheduleHelper {
                         conn = XxlJobAdminConfig.getAdminConfig().getDataSource().getConnection();
                         connAutoCommit = conn.getAutoCommit();
                         conn.setAutoCommit(false);
-
+                        // 分布式锁,集群中的 任务调度中心 串行执行。
                         preparedStatement = conn.prepareStatement(  "select * from xxl_job_lock where lock_name = 'schedule_lock' for update" );
                         preparedStatement.execute();
 
                         // tx start
 
-                        // 1、pre read
+                        // 1、pre read 预先5秒提取出本节点承受范围的待执行的任务数量
                         long nowTime = System.currentTimeMillis();
                         List<XxlJobInfo> scheduleList = XxlJobAdminConfig.getAdminConfig().getXxlJobInfoDao().scheduleJobQuery(nowTime + PRE_READ_MS, preReadCount);
                         if (scheduleList!=null && scheduleList.size()>0) {
                             // 2、push time-ring
                             for (XxlJobInfo jobInfo: scheduleList) {
 
-                                // time-ring jump
+                                // time-ring jump 任务的执行时间已经过去,超过了5秒,需要根据 调度过期策略 进行处理。 FIRE_ONCE_NOW:立即执行一次
                                 if (nowTime > jobInfo.getTriggerNextTime() + PRE_READ_MS) {
                                     // 2.1、trigger-expire > 5s：pass && make next-trigger-time
                                     logger.warn(">>>>>>>>>>> xxl-job, schedule misfire, jobId = " + jobInfo.getId());
 
-                                    // 1、misfire match
+                                    // 1、misfire match 如果任务配置了 时间过期补偿策略,则立刻执行一次
                                     MisfireStrategyEnum misfireStrategyEnum = MisfireStrategyEnum.match(jobInfo.getMisfireStrategy(), MisfireStrategyEnum.DO_NOTHING);
                                     if (MisfireStrategyEnum.FIRE_ONCE_NOW == misfireStrategyEnum) {
-                                        // FIRE_ONCE_NOW 》 trigger
+                                        // FIRE_ONCE_NOW 》 trigger。 调度时间过期,触发立即执行一次的调度过期策略,调用 JobTriggerPoolHelper.trigger 执行一次
                                         JobTriggerPoolHelper.trigger(jobInfo.getId(), TriggerTypeEnum.MISFIRE, -1, null, null, null);
                                         logger.debug(">>>>>>>>>>> xxl-job, schedule push trigger : jobId = " + jobInfo.getId() );
                                     }
 
-                                    // 2、fresh next
+                                    // 2、fresh next 设置下次执行时间
                                     refreshNextValidTime(jobInfo, new Date());
 
-                                } else if (nowTime > jobInfo.getTriggerNextTime()) {
+                                } else if (nowTime > jobInfo.getTriggerNextTime()) { // 任务执行时间过去了,但是小于5秒.触发立刻执行
                                     // 2.2、trigger-expire < 5s：direct-trigger && make next-trigger-time
 
                                     // 1、trigger
@@ -122,7 +122,7 @@ public class JobScheduleHelper {
 
                                     }
 
-                                } else {
+                                } else { // 下次触发时间 大于 当前系统时间
                                     // 2.3、trigger-pre-read：time-ring trigger && make next-trigger-time
 
                                     // 1、make ring second
@@ -196,8 +196,8 @@ public class JobScheduleHelper {
 
 
                     // Wait seconds, align second
-                    if (cost < 1000) {  // scan-overtime, not wait
-                        try {
+                    if (cost < 1000) {  // 扫描超时不等待,例:出现锁等待情况(start加锁前获取的时间戳)
+                        try { // preReadSu=true 每秒扫描一次,preReadSu=false 5秒扫描一次
                             // pre-read period: success > scan each second; fail > skip this period;
                             TimeUnit.MILLISECONDS.sleep((preReadSuc?1000:PRE_READ_MS) - System.currentTimeMillis()%1000);
                         } catch (InterruptedException e) {
