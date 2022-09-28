@@ -108,10 +108,10 @@ public class JobScheduleHelper {
                                     // 2、fresh next
                                     refreshNextValidTime(jobInfo, new Date());
 
-                                    // next-trigger-time in 5s, pre-read again
+                                    // next-trigger-time in 5s, pre-read again 下次执行时间在5秒范围内,则将jobId投递到ring集合(配置了1秒执行一次的任务,此处兜底)
                                     if (jobInfo.getTriggerStatus()==1 && nowTime + PRE_READ_MS > jobInfo.getTriggerNextTime()) {
 
-                                        // 1、make ring second
+                                        // 1、make ring second 按秒数取模
                                         int ringSecond = (int)((jobInfo.getTriggerNextTime()/1000)%60);
 
                                         // 2、push time ring
@@ -225,7 +225,7 @@ public class JobScheduleHelper {
                 while (!ringThreadToStop) {
 
                     // align second
-                    try {
+                    try { // ringData key是秒数,意味着每秒都要轮询一次
                         TimeUnit.MILLISECONDS.sleep(1000 - System.currentTimeMillis() % 1000);
                     } catch (InterruptedException e) {
                         if (!ringThreadToStop) {
