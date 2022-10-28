@@ -37,7 +37,7 @@ public class JobFailMonitorHelper {
 				// monitor
 				while (!toStop) { // handle_code!=200 执行器服务执行异常,trigger_code != 0 或 200 调度失败(无可用的执行器地址或http错误)
 					try { // findFailJobLogIds 方法查询条件 !((trigger_code in (0, 200) and handle_code = 0) OR (handle_code = 200)) AND `alarm_status` = 0
-						// trigger_code:调度结果(由任务调度中心发起http后,响应结果确定的), handle_code:执行结果(由执行器服务执行完毕后,上报结果到任务调度中心后更新的) 针对调度成功且执行器服务未上报执行结果且宕机了则由JobCompleteHelper.monitorThread 进行数据补偿
+						// trigger_code:调度结果(由任务调度中心发起http后,有响应结果的), handle_code:执行结果(由执行器服务执行完毕后,上报结果到任务调度中心后更新的) 针对调度成功且执行器服务未上报执行结果且宕机了则由JobCompleteHelper.monitorThread 进行数据补偿,如果执行器服务上报失败,会有定时补偿上报功能(参考`triggerRetryCallbackThread`线程)
 						List<Long> failLogIds = XxlJobAdminConfig.getAdminConfig().getXxlJobLogDao().findFailJobLogIds(1000);
 						if (failLogIds!=null && !failLogIds.isEmpty()) {
 							for (long failLogId: failLogIds) {
