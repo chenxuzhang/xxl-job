@@ -69,13 +69,13 @@ public class JobScheduleHelper {
                         conn = XxlJobAdminConfig.getAdminConfig().getDataSource().getConnection();
                         connAutoCommit = conn.getAutoCommit();
                         conn.setAutoCommit(false);
-                        // 分布式锁,集群中的 任务调度中心 串行执行。
+                        // 分布式锁,集群中的 任务调度中心节点 串行执行。
                         preparedStatement = conn.prepareStatement(  "select * from xxl_job_lock where lock_name = 'schedule_lock' for update" );
                         preparedStatement.execute();
 
                         // tx start
 
-                        // 1、pre read 预先5秒提取出本节点承受范围的待执行的任务数量
+                        // 1、pre read 预先5秒提取出本节点预计可处理的待执行的任务数量
                         long nowTime = System.currentTimeMillis();
                         List<XxlJobInfo> scheduleList = XxlJobAdminConfig.getAdminConfig().getXxlJobInfoDao().scheduleJobQuery(nowTime + PRE_READ_MS, preReadCount);
                         if (scheduleList!=null && scheduleList.size()>0) {
@@ -196,8 +196,8 @@ public class JobScheduleHelper {
 
 
                     // Wait seconds, align second
-                    if (cost < 1000) {  // 扫描超时不等待,例:出现锁等待情况(start加锁前获取的时间戳)
-                        try { // preReadSu=true 每秒扫描一次,preReadSu=false 5秒扫描一次
+                    if (cost < 1000) {  // 扫描超时情况下,不需要等待。例:出现锁等待情况(start变量为加锁前获取的时间戳)
+                        try { // preReadSu=true 每秒扫描一次(读取到了可执行的任务),preReadSu=false 5秒扫描一次(未读取到可执行的任务)
                             // pre-read period: success > scan each second; fail > skip this period;
                             TimeUnit.MILLISECONDS.sleep((preReadSuc?1000:PRE_READ_MS) - System.currentTimeMillis()%1000);
                         } catch (InterruptedException e) {
