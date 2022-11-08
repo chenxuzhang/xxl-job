@@ -206,7 +206,7 @@ public class JobThread extends Thread{
                 if(triggerParam != null) {
                     // callback handler info
                     if (!toStop) {
-                        // commonm 当前任务处理完毕 且 当前 JobThread 未被干掉(toStop=true), 异步告知 调度中心 执行器服务的执行结果
+                        // commonm 当前任务处理完毕 且 当前 JobThread 未被干掉(toStop=false), 异步告知 调度中心 执行器服务的执行结果
                         TriggerCallbackThread.pushCallBack(new HandleCallbackParam(
                         		triggerParam.getLogId(),
 								triggerParam.getLogDateTime(),
