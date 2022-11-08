@@ -119,7 +119,7 @@ public class ExecutorBizImpl implements ExecutorBiz {
         }
 
         // executor block strategy
-        if (jobThread != null) { // 缓存的任务线程。执行过一次且任务配置没有发生变动
+        if (jobThread != null) { // 缓存的任务线程
             ExecutorBlockStrategyEnum blockStrategy = ExecutorBlockStrategyEnum.match(triggerParam.getExecutorBlockStrategy(), null);
             if (ExecutorBlockStrategyEnum.DISCARD_LATER == blockStrategy) {
                 // discard when running
